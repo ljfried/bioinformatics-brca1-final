@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from hmmlearn.hmm import MultinomialHMM
 
+import time
+
 # =======================
 # Data
 # =======================
@@ -171,7 +173,7 @@ def train_location_hmms():
     return hmm_b, hmm_p, test_s
 
 # =======================
-# EVALUATION
+# EVALUATE
 # =======================
 
 def evaluate_location_hmm():
@@ -194,9 +196,12 @@ def evaluate_location_hmm():
         y_pred.append(1 if lp > lb else 0)
 
     from sklearn.metrics import classification_report, accuracy_score
-    print("\n=== Location-Based HMM Classification ===")
+    print("\n=== Location-Only HMM Classification ===")
     print(classification_report(y_true, y_pred, zero_division=0))
     print("Accuracy:", accuracy_score(y_true, y_pred))
 
 if __name__ == "__main__":
+    start_time = time.time()
     evaluate_location_hmm()
+    end_time = time.time()
+    print(f"Total Runtime: {end_time - start_time:.2f} seconds")
