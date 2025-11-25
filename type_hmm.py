@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 from hmmlearn.hmm import MultinomialHMM
 
+import time
+
+
 # =======================
 # Data
 # =======================
@@ -130,38 +133,37 @@ def classify_mutation_biotype(spdi):
     del_len = len(deleted)
     ins_len = len(inserted)
 
-    # 1. Structural CNVs ≥50 bp
+    # Structural CNVs ≥50 bp
     if del_len >= 50 or ins_len >= 50:
         return BIO_MUT_TYPES["structural_cnv"]
 
-    # 2. Microsatellite: repeated strings like "CA" repeated, or long homopolymers
+    # Microsatellite: repeated strings like "CA", etc
     bases = {"A", "C", "G", "T"}
     if all(c in bases for c in deleted + inserted):
         if (len(deleted) >= 6 and len(set(deleted)) == 1) or \
            (len(inserted) >= 6 and len(set(inserted)) == 1):
             return BIO_MUT_TYPES["microsatellite"]
 
-    # 3. SNVs (possible synonymous/missense/nonsense)
+    # Possible synonymous/missense/nonsense
     if del_len == 1 and ins_len == 1:
         ref = deleted.upper()
         alt = inserted.upper()
         if ref in bases and alt in bases:
-            # NOTE: For real annotation you would use a codon table.
-            # Here we approximate missense vs nonsense vs synonymous:
+            # This is an approximation.
 
-            # Stop codon creation ("nonsense") if alt is '*' (ClinVar uses '*')
+            # Stop codon creation ("nonsense") if alt is ʻ*ʻ
             if alt == "*":
                 return BIO_MUT_TYPES["nonsense"]
 
-            # If reference AA = alternate AA → synonymous. But here we
-            # can't compute amino acids without coding context.
-            # Minimal fallback rule:
+            # canʻt compute amino acids without coding context.
+            # so...
+            # fallback...
             if ref == alt:
                 return BIO_MUT_TYPES["synonymous"]
 
             return BIO_MUT_TYPES["missense"]
 
-    # 4. Frameshift vs in-frame
+    # Frameshift or in frame
     if (ins_len - del_len) % 3 == 0:
         return BIO_MUT_TYPES["inframe_indel"]
     else:
@@ -179,7 +181,6 @@ def build_sequences(samples):
     for s in samples:
         cat = classify_mutation_biotype(s["spdi"])
 
-        # --- NEW: one-hot vector required by new MultinomialHMM ---
         onehot = np.zeros(N_CATEGORIES, dtype=int)
         onehot[cat] = 1
 
@@ -308,6 +309,8 @@ def evaluate_biotype_hmm():
     print(classification_report(y_true, y_pred, zero_division=0))
     print("Accuracy:", accuracy_score(y_true, y_pred))
 
-
 if __name__ == "__main__":
+    start_time = time.time()
     evaluate_biotype_hmm()
+    end_time = time.time()
+    print(f"Total Runtime: {end_time - start_time:.2f} seconds")
