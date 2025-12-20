@@ -12,9 +12,6 @@ from sklearn.metrics import classification_report, accuracy_score, confusion_mat
 # Data
 # =======================
 
-BRCA1_START = 43043692
-BRCA1_END   = 43170845
-
 DEFAULT_BENIGN = "clinvar_result_benign.txt"
 DEFAULT_PATH   = "clinvar_result_pathogenic.txt"
 
@@ -36,7 +33,7 @@ BIO_MUT_TYPES = {
 
 N_TYPE_CATEGORIES = len(BIO_MUT_TYPES)
 
-N_LOC_BINS = 200
+N_LOC_BINS = 300
 
 # =======================
 # HELPER
@@ -68,6 +65,8 @@ class DataPreparation:
     def __init__(self, benign_file=DEFAULT_BENIGN, path_file=DEFAULT_PATH):
         self.benign_file = benign_file
         self.path_file = path_file
+        self.loc_start = None
+        self.loc_end = None
 
     @staticmethod
     def parse_spdi(spdi):
@@ -145,6 +144,7 @@ class DataPreparation:
         df = pd.concat([b, p], ignore_index=True)
 
         samples = []
+        positions = []
         for _, row in df.iterrows():
             spdi_raw = row["Canonical SPDI"]
             parsed = self.parse_spdi(spdi_raw)
@@ -153,6 +153,11 @@ class DataPreparation:
 
             label = self.normalize_label(row.get("label"))
             samples.append({"spdi": parsed, "label": label})
+            positions.append(parsed["pos"])
+        
+        if positions:
+            self.loc_start = min(positions)
+            self.loc_end = max(positions) + 1  # half-open interval
 
         return samples
 
@@ -257,18 +262,22 @@ class LocationHMM:
     def __init__(self, data_prep: DataPreparation):
         self.data_prep = data_prep
 
-    @staticmethod
-    def get_mutation_offset(spdi):
-        pos = spdi["pos"]
-        if not (BRCA1_START <= pos < BRCA1_END):
-            return None
-        return pos - BRCA1_START
-
     def bin_location(self, spdi):
-        rel = self.get_mutation_offset(spdi)
-        if rel is None:
+        pos = spdi["pos"]
+
+        start = self.data_prep.loc_start
+        end = self.data_prep.loc_end
+
+        if start is None or end is None:
             return None
-        bin_idx = int(rel / (BRCA1_END - BRCA1_START) * N_LOC_BINS)
+
+        if not (start <= pos < end):
+            return None
+
+        rel = pos - start
+        span = end - start
+
+        bin_idx = int(rel / span * N_LOC_BINS)
         return min(bin_idx, N_LOC_BINS - 1)
 
     def build_sequences(self, samples):
